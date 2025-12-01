@@ -34,15 +34,8 @@ const Header = () => {
             <NavLink href="#about">À propos</NavLink>
           </nav>
 
-          {/* CTA Buttons */}
-          <div className="hidden md:flex items-center gap-3">
-            <Button variant="ghost" size="sm">
-              Connexion
-            </Button>
-            <Button variant="hero" size="sm">
-              Commencer gratuitement
-            </Button>
-          </div>
+          {/* Spacer for layout balance */}
+          <div className="hidden md:block w-8" />
 
           {/* Mobile Menu Button */}
           <Button
@@ -77,14 +70,6 @@ const Header = () => {
             <NavLink href="#about" mobile onClick={() => setIsMenuOpen(false)}>
               À propos
             </NavLink>
-            <div className="flex flex-col gap-3 pt-4 border-t border-border">
-              <Button variant="outline" className="w-full">
-                Connexion
-              </Button>
-              <Button variant="hero" className="w-full">
-                Commencer gratuitement
-              </Button>
-            </div>
           </nav>
         </motion.div>
       )}
