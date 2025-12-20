@@ -5,8 +5,12 @@ import { Button } from "@/components/ui/button";
 import { ContentData } from "./AppSection";
 import * as pdfjsLib from "pdfjs-dist";
 
-// Set the worker source
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Configure PDF.js to work without external worker (inline worker mode)
+// This avoids CORS and module loading issues
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 interface PDFUploaderProps {
   onFileProcessed: (data: ContentData) => void;
