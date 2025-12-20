@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Upload,
   FileText,
@@ -26,6 +27,7 @@ const AppSection = () => {
   const [mode, setMode] = useState<AppMode>("upload");
   const [contentData, setContentData] = useState<ContentData | null>(null);
   const [selectedPages, setSelectedPages] = useState<number>(5);
+  const [questionCount, setQuestionCount] = useState<number>(5);
 
   const handleFileProcessed = (data: ContentData) => {
     setContentData(data);
@@ -127,6 +129,8 @@ const AppSection = () => {
                       contentData={contentData}
                       selectedPages={selectedPages}
                       setSelectedPages={setSelectedPages}
+                      questionCount={questionCount}
+                      setQuestionCount={setQuestionCount}
                       onModeSelect={handleModeSelect}
                     />
                   </motion.div>
@@ -140,7 +144,7 @@ const AppSection = () => {
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <QuizMode content={contentData.content} pages={selectedPages} />
+                    <QuizMode content={contentData.content} pages={selectedPages} questionCount={questionCount} />
                   </motion.div>
                 )}
 
@@ -168,13 +172,35 @@ const ModeSelector = ({
   contentData,
   selectedPages,
   setSelectedPages,
+  questionCount,
+  setQuestionCount,
   onModeSelect,
 }: {
   contentData: ContentData;
   selectedPages: number;
   setSelectedPages: (pages: number) => void;
+  questionCount: number;
+  setQuestionCount: (count: number) => void;
   onModeSelect: (mode: "quiz" | "resume") => void;
 }) => {
+  const questionPresets = [5, 10, 15, 20];
+  const [customCount, setCustomCount] = useState<string>("");
+  const [showCustom, setShowCustom] = useState(false);
+
+  const handleCustomCountChange = (value: string) => {
+    setCustomCount(value);
+    const num = parseInt(value);
+    if (!isNaN(num) && num >= 1 && num <= 50) {
+      setQuestionCount(num);
+    }
+  };
+
+  const handlePresetClick = (count: number) => {
+    setQuestionCount(count);
+    setShowCustom(false);
+    setCustomCount("");
+  };
+
   return (
     <div className="space-y-8">
       {/* File Info */}
@@ -211,6 +237,63 @@ const ModeSelector = ({
             {selectedPages}
           </span>
         </div>
+      </div>
+
+      {/* Question Count Selection */}
+      <div className="space-y-4">
+        <label className="block font-medium text-foreground">
+          Nombre de questions du quiz
+        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          {questionPresets.map((count) => (
+            <motion.button
+              key={count}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handlePresetClick(count)}
+              className={`px-4 py-2 rounded-xl font-medium transition-colors ${
+                questionCount === count && !showCustom
+                  ? "bg-qrayti-coral text-white"
+                  : "bg-muted hover:bg-muted/80 text-foreground"
+              }`}
+            >
+              {count}
+            </motion.button>
+          ))}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowCustom(true)}
+            className={`px-4 py-2 rounded-xl font-medium transition-colors ${
+              showCustom
+                ? "bg-qrayti-coral text-white"
+                : "bg-muted hover:bg-muted/80 text-foreground"
+            }`}
+          >
+            Autre
+          </motion.button>
+        </div>
+        
+        {showCustom && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3"
+          >
+            <Input
+              type="number"
+              min={1}
+              max={50}
+              value={customCount}
+              onChange={(e) => handleCustomCountChange(e.target.value)}
+              placeholder="Entrez un nombre (1-50)"
+              className="max-w-[200px]"
+            />
+            <span className="text-sm text-muted-foreground">
+              questions sélectionnées: <span className="font-semibold text-qrayti-coral">{questionCount}</span>
+            </span>
+          </motion.div>
+        )}
       </div>
 
       {/* Mode Selection */}

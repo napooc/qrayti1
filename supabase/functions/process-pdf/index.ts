@@ -12,14 +12,14 @@ serve(async (req) => {
   }
 
   try {
-    const { content, mode, pages } = await req.json();
+    const { content, mode, pages, questionCount = 5 } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    console.log(`Processing PDF in ${mode} mode for ${pages} pages`);
+    console.log(`Processing PDF in ${mode} mode for ${pages} pages, questionCount: ${questionCount}`);
 
     let systemPrompt = "";
     let userPrompt = "";
@@ -32,7 +32,7 @@ IMPORTANT: Tu dois TOUJOURS répondre en JSON valide avec exactement cette struc
   "questions": [
     {
       "id": 1,
-      "question": "La question en français",
+      "question": "La question en français basée sur le contenu fourni",
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "correctIndex": 0,
       "explanation": "Explication en français simple",
@@ -42,14 +42,16 @@ IMPORTANT: Tu dois TOUJOURS répondre en JSON valide avec exactement cette struc
 }
 
 Règles:
-- Génère exactement 5 questions à choix multiples
+- Génère exactement ${questionCount} questions à choix multiples
 - Chaque question a 4 options
 - correctIndex est l'index de la bonne réponse (0-3)
 - L'explication doit être claire et pédagogique
 - L'explication en Darija doit utiliser le dialecte marocain avec des expressions locales
-- Les questions doivent tester la compréhension, pas la mémorisation`;
+- Les questions doivent être basées UNIQUEMENT sur le contenu fourni
+- Les questions doivent tester la compréhension, pas la mémorisation
+- Varie les types de questions: définitions, concepts, applications pratiques`;
 
-      userPrompt = `Basé sur ce contenu académique, génère 5 questions de quiz avec des explications en français et en Darija:
+      userPrompt = `Basé sur ce contenu académique, génère exactement ${questionCount} questions de quiz avec des explications en français et en Darija. Les questions doivent être directement liées au contenu ci-dessous:
 
 ${content.substring(0, 8000)}`;
     } else if (mode === "resume") {

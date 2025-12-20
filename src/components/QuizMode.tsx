@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 interface QuizModeProps {
   content: string;
   pages: number;
+  questionCount: number;
 }
 
 interface Question {
@@ -29,7 +30,7 @@ interface Question {
   explanationDarija: string;
 }
 
-const QuizMode = ({ content, pages }: QuizModeProps) => {
+const QuizMode = ({ content, pages, questionCount }: QuizModeProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -47,9 +48,9 @@ const QuizMode = ({ content, pages }: QuizModeProps) => {
       setError(null);
 
       try {
-        console.log("Generating quiz from content...");
+        console.log(`Generating quiz with ${questionCount} questions from content...`);
         const { data, error: fnError } = await supabase.functions.invoke('process-pdf', {
-          body: { content, mode: 'quiz', pages }
+          body: { content, mode: 'quiz', pages, questionCount }
         });
 
         if (fnError) {
@@ -83,7 +84,7 @@ const QuizMode = ({ content, pages }: QuizModeProps) => {
     };
 
     generateQuiz();
-  }, [content, pages, toast]);
+  }, [content, pages, questionCount, toast]);
 
   const handleAnswer = (index: number) => {
     if (selectedAnswer !== null) return;
