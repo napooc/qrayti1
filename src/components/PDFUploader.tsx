@@ -3,6 +3,10 @@ import { motion } from "framer-motion";
 import { Upload, FileText, Loader2, AlertCircle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ContentData } from "./AppSection";
+import * as pdfjsLib from "pdfjs-dist";
+
+// Set the worker source
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface PDFUploaderProps {
   onFileProcessed: (data: ContentData) => void;
@@ -24,72 +28,23 @@ const PDFUploader = ({ onFileProcessed }: PDFUploaderProps) => {
     setIsDragging(false);
   }, []);
 
-  const extractTextFromPDF = async (file: File): Promise<string> => {
-    // Read the file as text - for PDFs we'll read what we can
-    // In a production app, you'd use a proper PDF parser library
-    const reader = new FileReader();
+  const extractTextFromPDF = async (file: File): Promise<{ text: string; pageCount: number }> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     
-    return new Promise((resolve, reject) => {
-      reader.onload = async (e) => {
-        try {
-          const arrayBuffer = e.target?.result as ArrayBuffer;
-          const bytes = new Uint8Array(arrayBuffer);
-          
-          // Try to extract readable text from the PDF
-          let text = "";
-          const decoder = new TextDecoder("utf-8", { fatal: false });
-          const rawText = decoder.decode(bytes);
-          
-          // Extract text between BT and ET markers (PDF text objects)
-          const textMatches = rawText.match(/BT[\s\S]*?ET/g) || [];
-          
-          for (const match of textMatches) {
-            // Extract text from Tj and TJ operators
-            const tjMatches = match.match(/\((.*?)\)\s*Tj/g) || [];
-            const tjArrayMatches = match.match(/\[(.*?)\]\s*TJ/g) || [];
-            
-            for (const tj of tjMatches) {
-              const content = tj.match(/\((.*?)\)/)?.[1] || "";
-              text += content + " ";
-            }
-            
-            for (const tjArray of tjArrayMatches) {
-              const content = tjArray.match(/\((.*?)\)/g) || [];
-              for (const c of content) {
-                text += c.replace(/[()]/g, "") + " ";
-              }
-            }
-          }
-          
-          // Clean up the text
-          text = text
-            .replace(/\\n/g, "\n")
-            .replace(/\\r/g, "")
-            .replace(/\s+/g, " ")
-            .trim();
-          
-          // If we couldn't extract much, try a simpler approach
-          if (text.length < 100) {
-            // Extract any readable ASCII text
-            const simpleText = rawText
-              .replace(/[^\x20-\x7E\n\r\t]/g, " ")
-              .replace(/\s+/g, " ")
-              .trim();
-            
-            if (simpleText.length > text.length) {
-              text = simpleText;
-            }
-          }
-          
-          resolve(text || "Contenu du PDF non extractible directement.");
-        } catch (err) {
-          reject(err);
-        }
-      };
-      
-      reader.onerror = () => reject(new Error("Erreur de lecture du fichier"));
-      reader.readAsArrayBuffer(file);
-    });
+    let fullText = "";
+    const numPages = pdf.numPages;
+    
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(" ");
+      fullText += `\n--- Page ${pageNum} ---\n${pageText}`;
+    }
+    
+    return { text: fullText.trim(), pageCount: numPages };
   };
 
   const processFile = async (file: File) => {
@@ -99,35 +54,37 @@ const PDFUploader = ({ onFileProcessed }: PDFUploaderProps) => {
 
     try {
       // Validate file type
-      const validTypes = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
-      if (!validTypes.includes(file.type) && !file.name.endsWith(".pdf") && !file.name.endsWith(".doc") && !file.name.endsWith(".docx")) {
-        throw new Error("Veuillez télécharger un fichier PDF ou Word");
+      if (!file.name.toLowerCase().endsWith(".pdf")) {
+        throw new Error("Veuillez télécharger un fichier PDF");
       }
 
-      // Check file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        throw new Error("Le fichier est trop volumineux (max 10MB)");
+      // Check file size (max 20MB)
+      if (file.size > 20 * 1024 * 1024) {
+        throw new Error("Le fichier est trop volumineux (max 20MB)");
       }
 
       setProgress("Extraction du contenu...");
       
-      // Extract text from PDF
-      const extractedText = await extractTextFromPDF(file);
+      // Extract text from PDF using pdf.js
+      const { text, pageCount } = await extractTextFromPDF(file);
       
-      // Estimate page count based on content length
-      const estimatedPages = Math.max(1, Math.ceil(extractedText.length / 3000));
+      if (!text || text.length < 50) {
+        throw new Error("Le PDF ne contient pas assez de texte extractible. Essayez un autre fichier.");
+      }
       
       setProgress("Préparation terminée!");
+      console.log(`Extracted ${text.length} characters from ${pageCount} pages`);
 
       const data: ContentData = {
         fileName: file.name,
-        content: extractedText,
-        pageCount: estimatedPages,
+        content: text,
+        pageCount: pageCount,
       };
 
       onFileProcessed(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Une erreur est survenue");
+      console.error("PDF processing error:", err);
+      setError(err instanceof Error ? err.message : "Une erreur est survenue lors de l'extraction du PDF");
     } finally {
       setIsProcessing(false);
       setProgress("");
@@ -223,7 +180,7 @@ const PDFUploader = ({ onFileProcessed }: PDFUploaderProps) => {
       >
         <input
           type="file"
-          accept=".pdf,.doc,.docx"
+          accept=".pdf"
           onChange={handleFileSelect}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           disabled={isProcessing}
@@ -240,7 +197,7 @@ const PDFUploader = ({ onFileProcessed }: PDFUploaderProps) => {
               {progress || "Traitement en cours..."}
             </p>
             <p className="text-sm text-muted-foreground">
-              Préparation de votre document
+              Extraction du contenu de votre PDF
             </p>
           </motion.div>
         ) : (
@@ -261,7 +218,7 @@ const PDFUploader = ({ onFileProcessed }: PDFUploaderProps) => {
             </p>
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
               <FileText className="w-4 h-4" />
-              <span>PDF, DOC, DOCX • Max 10MB</span>
+              <span>PDF uniquement • Max 20MB</span>
             </div>
           </>
         )}
