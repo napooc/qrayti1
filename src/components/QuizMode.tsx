@@ -10,7 +10,10 @@ import {
   Lightbulb,
   RefreshCw,
   Brain,
+  AlertCircle,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface QuizModeProps {
   content: string;
@@ -26,80 +29,9 @@ interface Question {
   explanationDarija: string;
 }
 
-const mockQuestions: Question[] = [
-  {
-    id: 1,
-    question: "Quel est le texte fondamental qui régit le droit civil au Maroc?",
-    options: [
-      "Le Code Civil Français",
-      "Le Dahir des Obligations et Contrats (DOC)",
-      "La Constitution Marocaine",
-      "Le Code de Commerce",
-    ],
-    correctIndex: 1,
-    explanation:
-      "Le Dahir des Obligations et Contrats (DOC), promulgué en 1913, est le texte fondamental qui régit le droit civil au Maroc. Il définit les règles fondamentales des relations entre personnes privées.",
-    explanationDarija:
-      "الـ DOC هو القانون اللي كيحكم العلاقات بين الناس فالمغرب. تدار من 1913 وكيشمل كلشي على العقود والالتزامات.",
-  },
-  {
-    id: 2,
-    question:
-      "Lequel de ces éléments n'est PAS une source des obligations en droit marocain?",
-    options: ["Le contrat", "La coutume", "Le quasi-délit", "La loi"],
-    correctIndex: 1,
-    explanation:
-      "La coutume n'est pas listée comme source directe des obligations dans le DOC. Les sources sont: le contrat, le quasi-contrat, le délit, le quasi-délit et la loi.",
-    explanationDarija:
-      "العادة ماشي مصدر من مصادر الالتزامات فالـ DOC. المصادر الرئيسية هي: العقد، شبه العقد، الجريمة، شبه الجريمة، والقانون.",
-  },
-  {
-    id: 3,
-    question:
-      "Qu'est-ce que le principe de 'l'autonomie de la volonté' signifie en droit des contrats?",
-    options: [
-      "L'État peut annuler tout contrat",
-      "Les parties sont libres de déterminer le contenu de leur contrat",
-      "Un contrat doit être écrit pour être valide",
-      "Seuls les avocats peuvent rédiger des contrats",
-    ],
-    correctIndex: 1,
-    explanation:
-      "L'autonomie de la volonté est un principe fondamental qui permet aux parties de déterminer librement le contenu et les conditions de leur contrat, dans les limites de la loi et de l'ordre public.",
-    explanationDarija:
-      "استقلالية الإرادة كتعني أن الناس حرين يكتبو فالعقد ديالهم شنو بغاو، مادام ما خالفوش القانون. يعني أنت وصاحبك تقدرو تتفقو على اللي بغيتو.",
-  },
-  {
-    id: 4,
-    question:
-      "Pour qu'un contrat soit valablement formé, combien de conditions essentielles faut-il réunir?",
-    options: ["2 conditions", "3 conditions", "4 conditions", "5 conditions"],
-    correctIndex: 2,
-    explanation:
-      "Pour qu'un contrat soit valide, il faut 4 conditions: le consentement des parties, la capacité juridique, un objet certain et licite, et une cause licite.",
-    explanationDarija:
-      "باش العقد يكون صحيح خاصك 4 شروط: الموافقة، الأهلية (يعني تكون بالغ وعاقل)، موضوع واضح ومشروع، وسبب مشروع.",
-  },
-  {
-    id: 5,
-    question:
-      "Comment définit-on le contrat en droit marocain?",
-    options: [
-      "Un document écrit signé par un notaire",
-      "Un accord de deux ou plusieurs volontés en vue de créer des effets de droit",
-      "Une obligation imposée par l'État",
-      "Un engagement unilatéral d'une personne",
-    ],
-    correctIndex: 1,
-    explanation:
-      "Le contrat est défini comme l'accord de deux ou plusieurs volontés en vue de créer des effets de droit. C'est la rencontre d'une offre et d'une acceptation.",
-    explanationDarija:
-      "العقد هو الاتفاق بين جوج ولا كثر من الناس باش يديرو شي حاجة قانونية. مثلا: أنا وأنت نتفقو أنا نبيعك الدار وأنت تخلصني.",
-  },
-];
-
 const QuizMode = ({ content, pages }: QuizModeProps) => {
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -107,17 +39,51 @@ const QuizMode = ({ content, pages }: QuizModeProps) => {
   const [score, setScore] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const [answers, setAnswers] = useState<(number | null)[]>([]);
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Simulate AI generating questions
-    const timer = setTimeout(() => {
-      setQuestions(mockQuestions);
-      setAnswers(new Array(mockQuestions.length).fill(null));
-      setIsLoading(false);
-    }, 2500);
+    const generateQuiz = async () => {
+      setIsLoading(true);
+      setError(null);
 
-    return () => clearTimeout(timer);
-  }, [content, pages]);
+      try {
+        console.log("Generating quiz from content...");
+        const { data, error: fnError } = await supabase.functions.invoke('process-pdf', {
+          body: { content, mode: 'quiz', pages }
+        });
+
+        if (fnError) {
+          console.error("Function error:", fnError);
+          throw fnError;
+        }
+
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        if (data.success && data.data?.questions) {
+          console.log("Quiz generated successfully:", data.data.questions);
+          setQuestions(data.data.questions);
+          setAnswers(new Array(data.data.questions.length).fill(null));
+        } else {
+          throw new Error("Format de réponse invalide");
+        }
+      } catch (err) {
+        console.error("Error generating quiz:", err);
+        const errorMessage = err instanceof Error ? err.message : "Erreur lors de la génération du quiz";
+        setError(errorMessage);
+        toast({
+          title: "Erreur",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    generateQuiz();
+  }, [content, pages, toast]);
 
   const handleAnswer = (index: number) => {
     if (selectedAnswer !== null) return;
@@ -153,6 +119,13 @@ const QuizMode = ({ content, pages }: QuizModeProps) => {
     setAnswers(new Array(questions.length).fill(null));
   };
 
+  const handleRetry = () => {
+    setError(null);
+    setIsLoading(true);
+    // Trigger re-fetch by changing a state that the useEffect depends on
+    window.location.reload();
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 space-y-6">
@@ -181,6 +154,28 @@ const QuizMode = ({ content, pages }: QuizModeProps) => {
             />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 space-y-6">
+        <div className="w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center">
+          <AlertCircle className="w-10 h-10 text-destructive" />
+        </div>
+        <div className="text-center space-y-2">
+          <p className="text-xl font-semibold text-foreground">
+            Erreur de génération
+          </p>
+          <p className="text-muted-foreground max-w-md">
+            {error}
+          </p>
+        </div>
+        <Button onClick={handleRetry} variant="outline">
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Réessayer
+        </Button>
       </div>
     );
   }
@@ -233,17 +228,17 @@ const QuizMode = ({ content, pages }: QuizModeProps) => {
         <div className="space-y-4">
           {percentage >= 70 && (
             <p className="text-qrayti-success font-medium">
-              🎉 Excellent travail! Vous maîtrisez bien ce sujet.
+              🎉 Excellent travail! Mzyan bzaf! Vous maîtrisez bien ce sujet.
             </p>
           )}
           {percentage >= 50 && percentage < 70 && (
             <p className="text-qrayti-warning font-medium">
-              📚 Bon effort! Continuez à réviser pour vous améliorer.
+              📚 Bon effort! Kammel 3la had lhall! Continuez à réviser.
             </p>
           )}
           {percentage < 50 && (
             <p className="text-destructive font-medium">
-              💪 Ne vous découragez pas! Révisez le résumé et réessayez.
+              💪 Ne vous découragez pas! 3awed 9ra! Révisez le résumé et réessayez.
             </p>
           )}
         </div>
@@ -363,7 +358,7 @@ const QuizMode = ({ content, pages }: QuizModeProps) => {
                 {isCorrect ? (
                   <>
                     <CheckCircle className="w-5 h-5" />
-                    <span className="font-semibold">Bonne réponse!</span>
+                    <span className="font-semibold">Bonne réponse! Mzyan!</span>
                   </>
                 ) : (
                   <>

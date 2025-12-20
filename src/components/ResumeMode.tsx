@@ -11,7 +11,11 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface ResumeModeProps {
   content: string;
@@ -25,125 +29,66 @@ interface SummarySection {
   essentialPoints: string[];
 }
 
-const mockSummary: SummarySection[] = [
-  {
-    title: "Introduction au Droit Civil Marocain",
-    content:
-      "Le droit civil marocain est principalement régi par le Dahir des Obligations et Contrats (DOC) de 1913. Ce code fondamental définit les règles essentielles qui gouvernent les relations juridiques entre les personnes privées. Il couvre notamment les contrats, les obligations, et la responsabilité civile.",
-    keyTerms: [
-      {
-        term: "DOC (Dahir des Obligations et Contrats)",
-        definition:
-          "Texte législatif fondamental du droit civil marocain promulgué en 1913",
-        definitionDarija:
-          "القانون اللي كيحكم العقود والالتزامات فالمغرب من 1913",
-      },
-      {
-        term: "Autonomie de la volonté",
-        definition:
-          "Principe permettant aux parties de déterminer librement le contenu de leurs contrats",
-        definitionDarija:
-          "يعني الناس حرين يكتبو فالعقد شنو بغاو مادام ماخالفوش القانون",
-      },
-      {
-        term: "Bonne foi",
-        definition:
-          "Obligation d'honnêteté et de loyauté dans l'exécution des contrats",
-        definitionDarija: "خاصك تكون صادق ومخلص ملي كتدير عقد مع شي واحد",
-      },
-    ],
-    essentialPoints: [
-      "Le DOC est le texte fondateur du droit des obligations au Maroc",
-      "Trois principes fondamentaux: liberté contractuelle, autonomie de la volonté, bonne foi",
-      "S'applique à toutes les obligations sauf celles régies par des textes spéciaux",
-    ],
-  },
-  {
-    title: "Les Sources des Obligations",
-    content:
-      "En droit marocain, les obligations peuvent naître de plusieurs sources distinctes. Le contrat reste la source principale, représentant l'accord de deux ou plusieurs volontés. Les autres sources incluent le quasi-contrat, le délit, le quasi-délit, et la loi elle-même.",
-    keyTerms: [
-      {
-        term: "Contrat (العقد)",
-        definition:
-          "Accord de deux ou plusieurs volontés en vue de créer des effets de droit",
-        definitionDarija: "اتفاق بين جوج ولا كثر من الناس باش يديرو شي حاجة قانونية",
-      },
-      {
-        term: "Quasi-contrat",
-        definition:
-          "Fait licite et volontaire créant une obligation sans accord préalable",
-        definitionDarija:
-          "شي فعل قانوني اللي كيخلق التزام بلا ما يكون عقد من قبل",
-      },
-      {
-        term: "Délit civil",
-        definition: "Acte illicite intentionnel causant un dommage à autrui",
-        definitionDarija: "شي فعل غير قانوني عمداني اللي كيضر شي واحد آخر",
-      },
-    ],
-    essentialPoints: [
-      "5 sources des obligations: contrat, quasi-contrat, délit, quasi-délit, loi",
-      "Le contrat est la source principale et la plus courante",
-      "Le contrat nécessite une offre et une acceptation",
-    ],
-  },
-  {
-    title: "La Formation du Contrat",
-    content:
-      "Pour qu'un contrat soit valablement formé en droit marocain, quatre conditions essentielles doivent être réunies: le consentement des parties, la capacité juridique, un objet certain et licite, et une cause licite. L'absence d'une de ces conditions peut entraîner la nullité du contrat.",
-    keyTerms: [
-      {
-        term: "Consentement",
-        definition: "Accord libre et éclairé des parties sur les termes du contrat",
-        definitionDarija: "موافقة حرة وواضحة على شروط العقد",
-      },
-      {
-        term: "Capacité juridique",
-        definition:
-          "Aptitude d'une personne à être titulaire de droits et à les exercer",
-        definitionDarija: "تكون بالغ وعاقل وتقدر تدير عقود قانونية",
-      },
-      {
-        term: "Objet du contrat",
-        definition:
-          "Ce sur quoi porte l'engagement des parties (bien, service, etc.)",
-        definitionDarija: "شنو اللي غادي يدار فالعقد: بيع، خدمة، إلخ",
-      },
-      {
-        term: "Cause licite",
-        definition:
-          "Raison juridiquement acceptable pour laquelle le contrat est conclu",
-        definitionDarija: "السبب القانوني علاش درتي العقد",
-      },
-    ],
-    essentialPoints: [
-      "4 conditions de validité: consentement, capacité, objet, cause",
-      "Toutes les conditions doivent être présentes simultanément",
-      "Un vice dans l'une des conditions peut annuler le contrat",
-    ],
-  },
-];
-
 const ResumeMode = ({ content, pages }: ResumeModeProps) => {
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<SummarySection[]>([]);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [expandedSections, setExpandedSections] = useState<number[]>([0]);
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Simulate AI generating summary
-    const timer = setTimeout(() => {
-      setSummary(mockSummary);
-      setIsLoading(false);
-    }, 2500);
+    const generateSummary = async () => {
+      setIsLoading(true);
+      setError(null);
 
-    return () => clearTimeout(timer);
-  }, [content, pages]);
+      try {
+        console.log("Generating summary from content...");
+        const { data, error: fnError } = await supabase.functions.invoke('process-pdf', {
+          body: { content, mode: 'resume', pages }
+        });
+
+        if (fnError) {
+          console.error("Function error:", fnError);
+          throw fnError;
+        }
+
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        if (data.success && data.data?.sections) {
+          console.log("Summary generated successfully:", data.data.sections);
+          setSummary(data.data.sections);
+          // Expand all sections by default
+          setExpandedSections(data.data.sections.map((_: SummarySection, i: number) => i));
+        } else {
+          throw new Error("Format de réponse invalide");
+        }
+      } catch (err) {
+        console.error("Error generating summary:", err);
+        const errorMessage = err instanceof Error ? err.message : "Erreur lors de la génération du résumé";
+        setError(errorMessage);
+        toast({
+          title: "Erreur",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    generateSummary();
+  }, [content, pages, toast]);
 
   const handleCopy = async (text: string, index: number) => {
     await navigator.clipboard.writeText(text);
     setCopiedIndex(index);
+    toast({
+      title: "Copié!",
+      description: "Le texte a été copié dans le presse-papiers",
+    });
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
@@ -151,6 +96,17 @@ const ResumeMode = ({ content, pages }: ResumeModeProps) => {
     setExpandedSections((prev) =>
       prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
     );
+  };
+
+  const handleRetry = () => {
+    window.location.reload();
+  };
+
+  const handleExportAll = () => {
+    const fullText = summary
+      .map(s => `# ${s.title}\n\n${s.content}\n\n## Termes clés\n${s.keyTerms.map(t => `- **${t.term}**: ${t.definition}\n  🇲🇦 ${t.definitionDarija}`).join('\n')}\n\n## Points essentiels\n${s.essentialPoints.map(p => `• ${p}`).join('\n')}`)
+      .join('\n\n---\n\n');
+    handleCopy(fullText, -1);
   };
 
   if (isLoading) {
@@ -168,7 +124,7 @@ const ResumeMode = ({ content, pages }: ResumeModeProps) => {
             Création du résumé...
           </p>
           <p className="text-muted-foreground">
-            L'IA structure et synthétise votre contenu
+            L'IA structure et synthétise votre contenu avec explications en Darija
           </p>
         </div>
         <div className="flex gap-1">
@@ -181,6 +137,28 @@ const ResumeMode = ({ content, pages }: ResumeModeProps) => {
             />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 space-y-6">
+        <div className="w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center">
+          <AlertCircle className="w-10 h-10 text-destructive" />
+        </div>
+        <div className="text-center space-y-2">
+          <p className="text-xl font-semibold text-foreground">
+            Erreur de génération
+          </p>
+          <p className="text-muted-foreground max-w-md">
+            {error}
+          </p>
+        </div>
+        <Button onClick={handleRetry} variant="outline">
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Réessayer
+        </Button>
       </div>
     );
   }
@@ -209,9 +187,9 @@ const ResumeMode = ({ content, pages }: ResumeModeProps) => {
             <p className="text-xs text-muted-foreground">Points essentiels</p>
           </div>
         </div>
-        <Button variant="outline" size="sm">
-          <Download className="w-4 h-4" />
-          Exporter PDF
+        <Button variant="outline" size="sm" onClick={handleExportAll}>
+          <Copy className="w-4 h-4" />
+          Copier tout
         </Button>
       </div>
 
@@ -273,74 +251,62 @@ const ResumeMode = ({ content, pages }: ResumeModeProps) => {
                 </div>
 
                 {/* Key Terms */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Key className="w-5 h-5 text-qrayti-coral" />
-                    <h4 className="font-semibold text-foreground">Termes clés</h4>
-                  </div>
-                  <div className="space-y-3">
-                    {section.keyTerms.map((term, termIndex) => (
-                      <div
-                        key={termIndex}
-                        className="p-4 rounded-xl bg-qrayti-coral/5 border border-qrayti-coral/20"
-                      >
-                        <p className="font-semibold text-qrayti-coral mb-1">
-                          {term.term}
-                        </p>
-                        <p className="text-sm text-foreground mb-2">
-                          {term.definition}
-                        </p>
-                        <div className="flex items-start gap-2 pt-2 border-t border-qrayti-coral/10">
-                          <span className="text-xs">🇲🇦</span>
-                          <p className="text-sm text-muted-foreground" dir="auto">
-                            {term.definitionDarija}
+                {section.keyTerms && section.keyTerms.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Key className="w-5 h-5 text-qrayti-coral" />
+                      <h4 className="font-semibold text-foreground">Termes clés</h4>
+                    </div>
+                    <div className="space-y-3">
+                      {section.keyTerms.map((term, termIndex) => (
+                        <div
+                          key={termIndex}
+                          className="p-4 rounded-xl bg-qrayti-coral/5 border border-qrayti-coral/20"
+                        >
+                          <p className="font-semibold text-qrayti-coral mb-1">
+                            {term.term}
                           </p>
+                          <p className="text-sm text-foreground mb-2">
+                            {term.definition}
+                          </p>
+                          <div className="flex items-start gap-2 pt-2 border-t border-qrayti-coral/10">
+                            <span className="text-xs">🇲🇦</span>
+                            <p className="text-sm text-muted-foreground" dir="auto">
+                              {term.definitionDarija}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Essential Points */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Lightbulb className="w-5 h-5 text-qrayti-gold" />
-                    <h4 className="font-semibold text-foreground">
-                      Points essentiels
-                    </h4>
+                {section.essentialPoints && section.essentialPoints.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Lightbulb className="w-5 h-5 text-qrayti-gold" />
+                      <h4 className="font-semibold text-foreground">
+                        Points essentiels
+                      </h4>
+                    </div>
+                    <ul className="space-y-2">
+                      {section.essentialPoints.map((point, pointIndex) => (
+                        <li key={pointIndex} className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-qrayti-gold/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <Check className="w-3 h-3 text-qrayti-gold" />
+                          </div>
+                          <span className="text-foreground">{point}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                  <ul className="space-y-2">
-                    {section.essentialPoints.map((point, pointIndex) => (
-                      <li key={pointIndex} className="flex items-start gap-3">
-                        <div className="w-6 h-6 rounded-full bg-qrayti-gold/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <Check className="w-3 h-3 text-qrayti-gold" />
-                        </div>
-                        <span className="text-foreground">{point}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                )}
               </motion.div>
             )}
           </motion.div>
         ))}
       </div>
-
-      {/* Generate Quiz CTA */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="p-6 rounded-2xl bg-gradient-navy text-primary-foreground text-center"
-      >
-        <h3 className="text-xl font-semibold mb-2">Prêt à tester vos connaissances?</h3>
-        <p className="text-primary-foreground/80 mb-4">
-          Générez un quiz basé sur ce résumé pour consolider votre apprentissage
-        </p>
-        <Button variant="gold" size="lg">
-          Générer un quiz
-        </Button>
-      </motion.div>
     </div>
   );
 };
