@@ -12,6 +12,7 @@ const PDFUploader = ({ onFileProcessed }: PDFUploaderProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string>("");
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -23,50 +24,105 @@ const PDFUploader = ({ onFileProcessed }: PDFUploaderProps) => {
     setIsDragging(false);
   }, []);
 
+  const extractTextFromPDF = async (file: File): Promise<string> => {
+    // Read the file as text - for PDFs we'll read what we can
+    // In a production app, you'd use a proper PDF parser library
+    const reader = new FileReader();
+    
+    return new Promise((resolve, reject) => {
+      reader.onload = async (e) => {
+        try {
+          const arrayBuffer = e.target?.result as ArrayBuffer;
+          const bytes = new Uint8Array(arrayBuffer);
+          
+          // Try to extract readable text from the PDF
+          let text = "";
+          const decoder = new TextDecoder("utf-8", { fatal: false });
+          const rawText = decoder.decode(bytes);
+          
+          // Extract text between BT and ET markers (PDF text objects)
+          const textMatches = rawText.match(/BT[\s\S]*?ET/g) || [];
+          
+          for (const match of textMatches) {
+            // Extract text from Tj and TJ operators
+            const tjMatches = match.match(/\((.*?)\)\s*Tj/g) || [];
+            const tjArrayMatches = match.match(/\[(.*?)\]\s*TJ/g) || [];
+            
+            for (const tj of tjMatches) {
+              const content = tj.match(/\((.*?)\)/)?.[1] || "";
+              text += content + " ";
+            }
+            
+            for (const tjArray of tjArrayMatches) {
+              const content = tjArray.match(/\((.*?)\)/g) || [];
+              for (const c of content) {
+                text += c.replace(/[()]/g, "") + " ";
+              }
+            }
+          }
+          
+          // Clean up the text
+          text = text
+            .replace(/\\n/g, "\n")
+            .replace(/\\r/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+          
+          // If we couldn't extract much, try a simpler approach
+          if (text.length < 100) {
+            // Extract any readable ASCII text
+            const simpleText = rawText
+              .replace(/[^\x20-\x7E\n\r\t]/g, " ")
+              .replace(/\s+/g, " ")
+              .trim();
+            
+            if (simpleText.length > text.length) {
+              text = simpleText;
+            }
+          }
+          
+          resolve(text || "Contenu du PDF non extractible directement.");
+        } catch (err) {
+          reject(err);
+        }
+      };
+      
+      reader.onerror = () => reject(new Error("Erreur de lecture du fichier"));
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
   const processFile = async (file: File) => {
     setIsProcessing(true);
     setError(null);
+    setProgress("Lecture du fichier...");
 
     try {
       // Validate file type
-      if (!file.type.includes("pdf") && !file.type.includes("document")) {
-        throw new Error("Veuillez télécharger un fichier PDF");
+      const validTypes = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+      if (!validTypes.includes(file.type) && !file.name.endsWith(".pdf") && !file.name.endsWith(".doc") && !file.name.endsWith(".docx")) {
+        throw new Error("Veuillez télécharger un fichier PDF ou Word");
       }
 
-      // Simulate PDF processing (in real app, this would call an AI API)
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Check file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        throw new Error("Le fichier est trop volumineux (max 10MB)");
+      }
 
-      // Mock content extraction
-      const mockContent = `
-        Chapitre 1: Introduction au Droit Civil Marocain
-        
-        Le droit civil marocain est régi par le Dahir des Obligations et Contrats (DOC) promulgué en 1913.
-        Ce code définit les règles fondamentales régissant les relations entre les personnes privées.
-        
-        Les principes fondamentaux:
-        1. La liberté contractuelle
-        2. L'autonomie de la volonté
-        3. La bonne foi dans l'exécution des contrats
-        
-        Le DOC s'applique à toutes les obligations conventionnelles et légales, 
-        sauf celles qui sont régies par des textes spéciaux.
-        
-        Section 1: Les sources des obligations
-        Les obligations peuvent naître de plusieurs sources:
-        - Le contrat (العقد)
-        - Le quasi-contrat
-        - Le délit
-        - Le quasi-délit
-        - La loi
-        
-        Le contrat reste la source principale des obligations en droit marocain.
-        Il est défini comme l'accord de deux ou plusieurs volontés en vue de créer des effets de droit.
-      `;
+      setProgress("Extraction du contenu...");
+      
+      // Extract text from PDF
+      const extractedText = await extractTextFromPDF(file);
+      
+      // Estimate page count based on content length
+      const estimatedPages = Math.max(1, Math.ceil(extractedText.length / 3000));
+      
+      setProgress("Préparation terminée!");
 
       const data: ContentData = {
         fileName: file.name,
-        content: mockContent,
-        pageCount: Math.floor(Math.random() * 20) + 5,
+        content: extractedText,
+        pageCount: estimatedPages,
       };
 
       onFileProcessed(data);
@@ -74,6 +130,7 @@ const PDFUploader = ({ onFileProcessed }: PDFUploaderProps) => {
       setError(err instanceof Error ? err.message : "Une erreur est survenue");
     } finally {
       setIsProcessing(false);
+      setProgress("");
     }
   };
 
@@ -129,6 +186,20 @@ const PDFUploader = ({ onFileProcessed }: PDFUploaderProps) => {
         - La capacité juridique
         - Un objet certain et licite
         - Une cause licite
+        
+        Section 3: Les effets du contrat
+        Le contrat fait la loi des parties. Cela signifie que:
+        - Les parties sont liées par le contrat
+        - Le juge doit respecter la volonté des parties
+        - Le contrat ne peut être modifié unilatéralement
+        
+        Section 4: La responsabilité contractuelle
+        En cas de non-exécution du contrat, le créancier peut:
+        - Demander l'exécution forcée
+        - Demander la résolution du contrat
+        - Demander des dommages-intérêts
+        
+        La mise en demeure est généralement nécessaire avant toute action.
       `,
       pageCount: 12,
     };
@@ -166,10 +237,10 @@ const PDFUploader = ({ onFileProcessed }: PDFUploaderProps) => {
           >
             <Loader2 className="w-16 h-16 mx-auto text-qrayti-coral animate-spin" />
             <p className="text-lg font-medium text-foreground">
-              Analyse du document en cours...
+              {progress || "Traitement en cours..."}
             </p>
             <p className="text-sm text-muted-foreground">
-              Notre IA lit et comprend votre contenu
+              Préparation de votre document
             </p>
           </motion.div>
         ) : (
@@ -190,7 +261,7 @@ const PDFUploader = ({ onFileProcessed }: PDFUploaderProps) => {
             </p>
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
               <FileText className="w-4 h-4" />
-              <span>PDF, DOC, DOCX • Max 50MB</span>
+              <span>PDF, DOC, DOCX • Max 10MB</span>
             </div>
           </>
         )}
