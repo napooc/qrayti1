@@ -6,9 +6,11 @@ import hero1 from "@/assets/hero-1.jpg";
 import hero2 from "@/assets/hero-2.jpg";
 import hero3 from "@/assets/hero-3.jpg";
 import hero4 from "@/assets/hero-4.jpg";
-import { useState, useEffect } from "react";
+import hero5 from "@/assets/hero-5.jpg";
+import hero6 from "@/assets/hero-6.jpg";
+import { useState, useEffect, useCallback } from "react";
 
-const heroImages = [hero1, hero2, hero3, hero4];
+const heroImages = [hero1, hero2, hero3, hero4, hero5, hero6];
 
 const typingTexts = [
   "Quiz interactifs générés par IA",
@@ -22,6 +24,22 @@ const HeroSection = () => {
   const [currentTextIndex, setCurrentTextIndex] = useState(0);
   const [displayedText, setDisplayedText] = useState("");
   const [isTyping, setIsTyping] = useState(true);
+  const [imagesLoaded, setImagesLoaded] = useState<boolean[]>(new Array(heroImages.length).fill(false));
+
+  // Preload all images for fast transitions
+  useEffect(() => {
+    heroImages.forEach((src, index) => {
+      const img = new Image();
+      img.onload = () => {
+        setImagesLoaded(prev => {
+          const newState = [...prev];
+          newState[index] = true;
+          return newState;
+        });
+      };
+      img.src = src;
+    });
+  }, []);
 
   // Image carousel - changes every 8 seconds
   useEffect(() => {
@@ -66,26 +84,32 @@ const HeroSection = () => {
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-32 md:pt-40">
-      {/* Background Image Carousel */}
+      {/* Background Image Carousel - All images preloaded */}
       <div className="absolute inset-0 z-0">
-        <AnimatePresence mode="wait">
+        {heroImages.map((image, index) => (
           <motion.div
-            key={currentImageIndex}
-            initial={{ opacity: 0, scale: 1.1 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 1.5, ease: "easeInOut" }}
+            key={index}
+            initial={false}
+            animate={{ 
+              opacity: index === currentImageIndex ? 1 : 0,
+              scale: index === currentImageIndex ? 1 : 1.1 
+            }}
+            transition={{ duration: 1.2, ease: "easeInOut" }}
             className="absolute inset-0"
+            style={{ zIndex: index === currentImageIndex ? 1 : 0 }}
           >
             <img
-              src={heroImages[currentImageIndex]}
-              alt={`Hero background ${currentImageIndex + 1}`}
+              src={image}
+              alt={`Étudiants marocains utilisant Qrayti - ${index + 1}`}
               className="w-full h-full object-cover"
+              loading={index === 0 ? "eager" : "lazy"}
+              decoding="async"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-background/90 via-background/70 to-background" />
-            <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-transparent to-background/80" />
           </motion.div>
-        </AnimatePresence>
+        ))}
+        {/* Overlay gradients for text readability */}
+        <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/50 to-background z-10" />
+        <div className="absolute inset-0 bg-gradient-to-r from-background/60 via-transparent to-background/60 z-10" />
       </div>
 
       {/* Animated Background Elements */}
@@ -116,19 +140,31 @@ const HeroSection = () => {
         />
       </div>
 
-      {/* Image Carousel Indicators */}
-      <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-20 flex gap-3">
+      {/* Image Carousel Indicators - Enhanced */}
+      <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 flex gap-2">
         {heroImages.map((_, index) => (
           <button
             key={index}
             onClick={() => setCurrentImageIndex(index)}
-            className={`w-3 h-3 rounded-full transition-all duration-500 ${
+            className={`transition-all duration-500 rounded-full ${
               index === currentImageIndex 
-                ? "bg-qrayti-coral w-8" 
-                : "bg-foreground/30 hover:bg-foreground/50"
+                ? "bg-qrayti-coral w-10 h-3 shadow-lg shadow-qrayti-coral/50" 
+                : "bg-foreground/40 hover:bg-foreground/60 w-3 h-3"
             }`}
+            aria-label={`Image ${index + 1}`}
           />
         ))}
+      </div>
+
+      {/* Progress bar for current image */}
+      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 w-48">
+        <motion.div
+          key={currentImageIndex}
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: 1 }}
+          transition={{ duration: 8, ease: "linear" }}
+          className="h-0.5 bg-gradient-to-r from-qrayti-coral to-qrayti-gold origin-left rounded-full"
+        />
       </div>
 
       <div className="container mx-auto px-4 relative z-10">
