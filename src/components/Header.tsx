@@ -23,7 +23,7 @@ const Header = () => {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            <img src={logo} alt="Qrayti Logo" className="h-12 w-auto" />
+            <img src={logo} alt="Qrayti Logo" className="h-16 md:h-20 w-auto drop-shadow-lg" />
           </motion.a>
 
           {/* Desktop Navigation */}
