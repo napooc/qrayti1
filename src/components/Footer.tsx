@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Heart, Mail, MapPin } from "lucide-react";
+import { Heart, Mail } from "lucide-react";
 import logo from "@/assets/logo.png";
 
 const Footer = () => {
@@ -21,10 +21,6 @@ const Footer = () => {
               Nous transformons les cours complexes en outils d'apprentissage
               accessibles, avec des explications en Darija.
             </p>
-            <div className="flex items-center gap-2 text-qrayti-gold">
-              <MapPin className="w-4 h-4" />
-              <span className="text-sm">Made with ❤️ in Morocco</span>
-            </div>
           </div>
 
           {/* Links */}
