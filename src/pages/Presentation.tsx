@@ -16,8 +16,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { useRef, useState } from "react";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 import { toast } from "sonner";
 import logo from "@/assets/logo.png";
 
@@ -31,6 +29,33 @@ const staggerContainer = {
   visible: { opacity: 1, transition: { staggerChildren: 0.15 } }
 };
 
+const loadScriptOnce = (id: string, src: string) =>
+  new Promise<void>((resolve, reject) => {
+    const existing = document.getElementById(id) as HTMLScriptElement | null;
+
+    if (existing) {
+      if (existing.dataset.loaded === "true") return resolve();
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = id;
+    script.src = src;
+    script.async = true;
+    script.defer = true;
+
+    script.onload = () => {
+      script.dataset.loaded = "true";
+      resolve();
+    };
+
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+
+    document.head.appendChild(script);
+  });
+
 export default function Presentation() {
   const contentRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -42,18 +67,38 @@ export default function Presentation() {
     toast.info("Génération du PDF en cours...");
 
     try {
-      const canvas = await html2canvas(contentRef.current, {
+      await Promise.all([
+        loadScriptOnce(
+          "cdn-html2canvas",
+          "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js",
+        ),
+        loadScriptOnce(
+          "cdn-jspdf",
+          "https://cdn.jsdelivr.net/npm/jspdf@3.0.4/dist/jspdf.umd.min.js",
+        ),
+      ]);
+
+      const html2canvasLib = (window as any).html2canvas as undefined | ((el: HTMLElement, opts?: any) => Promise<HTMLCanvasElement>);
+      const jsPDFCtor = (window as any).jspdf?.jsPDF as undefined | (new (opts?: any) => any);
+
+      if (!html2canvasLib || !jsPDFCtor) {
+        throw new Error("PDF libraries not available after loading scripts");
+      }
+
+      const bg = window.getComputedStyle(contentRef.current).backgroundColor || "#ffffff";
+
+      const canvas = await html2canvasLib(contentRef.current, {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#FDF8F3'
+        backgroundColor: bg,
       });
 
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const pdf = new jsPDFCtor({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
       });
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
