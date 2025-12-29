@@ -1,9 +1,13 @@
 import { motion } from "framer-motion";
-import { BookOpen, Target, Lightbulb, CheckCircle, Users, FileText, Brain, ArrowRight, Sparkles } from "lucide-react";
+import { BookOpen, Target, Lightbulb, CheckCircle, Users, FileText, Brain, ArrowRight, Sparkles, Download } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { useRef, useState } from "react";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import { toast } from "sonner";
 import logo from "@/assets/logo.png";
 
 const fadeIn = {
@@ -17,6 +21,60 @@ const staggerContainer = {
 };
 
 export default function Presentation() {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportPDF = async () => {
+    if (!contentRef.current) return;
+    
+    setIsExporting(true);
+    toast.info("Génération du PDF en cours...");
+
+    try {
+      const canvas = await html2canvas(contentRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#FDF8F3'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      
+      let heightLeft = imgHeight * ratio;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', imgX, position, imgWidth * ratio, imgHeight * ratio);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight * ratio;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', imgX, position, imgWidth * ratio, imgHeight * ratio);
+        heightLeft -= pdfHeight;
+      }
+
+      pdf.save('Qrayti_Presentation.pdf');
+      toast.success("PDF téléchargé avec succès!");
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error("Erreur lors de la génération du PDF");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-cream">
       {/* Header */}
@@ -26,15 +84,26 @@ export default function Presentation() {
             <img src={logo} alt="Qrayti" className="h-8 w-8" />
             <span className="font-display text-xl font-bold">Qrayti</span>
           </div>
-          <Link to="/">
-            <Button variant="outline" size="sm" className="border-gold text-gold hover:bg-gold hover:text-navy">
-              Retour à l'app
+          <div className="flex items-center gap-3">
+            <Button 
+              onClick={handleExportPDF} 
+              disabled={isExporting}
+              size="sm" 
+              className="bg-gold text-navy hover:bg-gold/90"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {isExporting ? "Export..." : "Télécharger PDF"}
             </Button>
-          </Link>
+            <Link to="/">
+              <Button variant="outline" size="sm" className="border-gold text-gold hover:bg-gold hover:text-navy">
+                Retour à l'app
+              </Button>
+            </Link>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-12 space-y-16">
+      <main ref={contentRef} className="max-w-6xl mx-auto px-6 py-12 space-y-16">
         {/* Title Slide */}
         <motion.section 
           initial="hidden" 
